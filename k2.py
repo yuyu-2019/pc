@@ -30,7 +30,7 @@ def make_skeleton(V, corr_matrix, sample_num):
             adj_set = get_adjSet(i, C, node_num)  # 获得i的邻接点集
 
             if (C[i][j] == 1) and (len(adj_set) >= l):  # 如果两个点邻接，且邻接点集大小大于l
-                flag = False  # 一旦进入这个if，说明存在，所以不应该推出循环
+                flag = False  # 一旦进入这个if，说明存在，所以不应该退出循环
                 adj_set.remove(j)  # 邻接点集去掉j
 
                 combin_set = combinations(adj_set, l)  # 获得K集合长度为l的全部情况
@@ -47,7 +47,7 @@ def make_skeleton(V, corr_matrix, sample_num):
             else:
                 continue
 
-        # 判断是否该推出循环
+        # 判断是否该退出循环
         if flag:
             break
 
@@ -67,13 +67,13 @@ def indep_judge(i, j, K, corr_matrix, sample_num):
         r = corr_matrix[i, j]
     else:
         corr = corr_matrix[np.ix_([i] + [j] + K, [i] + [j] + K)]
-        # 先通过对相关系数矩阵求逆得到偏相关系数矩阵
-        partial_corr = np.linalg.pinv(corr)  # 求广义逆矩阵
+        # 先通过对相关系数矩阵求退得偏相关系数矩阵
+        partial_corr = np.linalg.pinv(corr)  # 求广义退矩阵
         # 然后取偏相关系数求条件偏相关系数
         # 条件偏相关系数求法：-1*pr(x,y)/sqrt(pr(x,x)*pr(y,y))
         r = (-1 * partial_corr[0, 1]) / (math.sqrt(abs(partial_corr[0, 0] * partial_corr[1, 1])))
 
-    # 把r压缩到(-1, 1)之中
+    # 把r压缩到(-1, 1)中
     r = min(0.99999, max(r, -0.99999))  # 大于1的都归到1，小于-1都归到-1
 
     # 进行fisher变换
@@ -81,8 +81,8 @@ def indep_judge(i, j, K, corr_matrix, sample_num):
     # 进行fisher变换后z服从正态分布，把其变成标准正态变量
     z_standard = z * math.sqrt(sample_num - len(K) - 3)
 
-    # 假设检验变量落在置信区间中
-    alpha = 0.005  # 置信度
+    # 假设检验变量落在    # 假设检验变量落在\u置信区间中
+    alpha = 0.005  # alpha = 0.005  #     alpha = 0.005  #     alpha = 0.005  # \u置信度
     if 2 * (1 - norm.cdf(abs(z_standard))) >= alpha:
         indep = True
     else:
@@ -120,7 +120,7 @@ def extend_CPDAG(V, C, S):
     G = C
     node_num = len(V)
 
-    # 先找到所有的三元组，因为之后的规则都是用在三元组上的。
+    # 先找到所有的三元组，因为之后的规则都是用在三元组上。
     # 先寻找所有相邻的二元组，再去找三元组
     pairs = []
     for i in range(node_num):
@@ -198,7 +198,24 @@ def PC_algorithm(data_path):
 def Hill_Climbing_BN(df):
     hc = HillClimbSearch(df)
     model_k2 = hc.estimate(scoring_method=K2Score(df))
-    return model_k2
+
+    # 生成邻接矩阵
+    nodes = list(df.columns)
+    adj_matrix = np.zeros((len(nodes), len(nodes)))
+    for edge in model_k2.edges():
+        i = nodes.index(edge[0])
+        j = nodes.index(edge[1])
+        adj_matrix[i][j] = 1
+
+    return model_k2, adj_matrix
+
+
+def compare_adjacency_matrices(matrix1, matrix2):
+    # 计算相似度
+    total_elements = matrix1.size
+    similar_elements = np.sum(matrix1 == matrix2)
+    similarity = similar_elements / total_elements
+    return similarity
 
 
 def main():
@@ -207,14 +224,21 @@ def main():
 
     # Run PC algorithm
     print("Running PC Algorithm...")
-    PC_algorithm(data_path)
+    CPDAG = PC_algorithm(data_path)
 
     # Run Hill Climbing Search with K2 score
     print("Running Hill Climbing with K2 Score...")
-    model_k2 = Hill_Climbing_BN(df)
+    model_k2, adj_matrix = Hill_Climbing_BN(df)
 
     print("Model using K2 Score:")
     print(model_k2.edges())
+
+    print("Adjacency Matrix from Hill Climbing:")
+    print(adj_matrix)
+
+    # Compare Adjacency Matrices
+    similarity = compare_adjacency_matrices(CPDAG, adj_matrix)
+    print(f"Similarity between PC Algorithm and Hill Climbing Adjacency Matrices: {similarity:.2f}")
 
     # Drawing Model
     nx.draw(model_k2, with_labels=True)
